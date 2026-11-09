@@ -828,12 +828,12 @@ class SupraBackend(Backend):
 
     # ---------------- training ----------------
 
-    def trainable_parameters(self, train_method: str):
+    def trainable_parameters(self, train_method: str | None):
+        if train_method not in (None, "lora"):
+            raise ValueError(f"supra supports train_method=None or 'lora', got {train_method!r}")
         self.transformer.train()
         params = [p for p in self.transformer.parameters() if p.requires_grad]
         assert params, "peft returned no trainable params"
-        if train_method not in (None, "lora"):
-            print(f"supra backend is LoRA-only; ignoring train_method={train_method!r}")
         return params
 
     def edit_components(self):
@@ -841,3 +841,15 @@ class SupraBackend(Backend):
         if self.encoder_lora:
             components["text_encoder"] = self.text_encoder
         return components
+
+    def training_modules(self):
+        from supra_conceptmod.state import declared_modules
+
+        return declared_modules(self, super().training_modules())
+
+    def artifact_metadata(self):
+        from supra_conceptmod.state import runtime_metadata
+
+        metadata = super().artifact_metadata()
+        metadata["runtime"] = runtime_metadata(self)
+        return metadata

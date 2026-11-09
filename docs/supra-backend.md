@@ -1,10 +1,10 @@
 # Supra2-IMG backend
 
-`supra-conceptmod` owns this model product. It drives [SupraLabs/Supra2-IMG](https://huggingface.co/SupraLabs/Supra2-IMG) the same way as Anima: DSL ops, `predict_v`, and a smoke script. The shared DSL and training runtime are supplied by conceptmod core.
+`supra-conceptmod` owns this model product. It drives [SupraLabs/Supra2-IMG](https://huggingface.co/SupraLabs/Supra2-IMG) through the shared DSL and velocity backend contract. The shared DSL and training runtime are supplied by conceptmod core.
 
 Hub `inference.py` is the architecture and sampler. Weights are not in this repo.
 
-## Hub pin
+## Model contract
 
 | | |
 |---|---|
@@ -27,7 +27,7 @@ Training samples use a shorter budget than generate: 8 steps, CFG 3.0.
 
 Looked up in this order, with no download unless you opt in:
 
-1. `ckpt=` passed to `load_backend` / `SupraBackend`
+1. `backend.ckpt` in the CLI configuration, or `ckpt=` when constructing `SupraBackend`
 2. `SUPRA_CKPT`
 3. `./model_final_ema.pt`
 4. The Hugging Face cache for `SupraLabs/Supra2-IMG`
@@ -35,16 +35,16 @@ Looked up in this order, with no download unless you opt in:
 `SUPRA_DOWNLOAD=1` (or `download=True`) fetches `model_final_ema.pt`. Flan-T5-Base and SD-VAE-FT-MSE load from their own Hub repos on the real path. None of those blobs are vendored.
 
 ```bash
-export SUPRA_CKPT=/path/to/model_final_ema.pt
 cat > supra-edit.json <<'JSON'
-{"backend": {"device": "cuda:0", "lora_rank": 16},
+{"backend": {"device": "cuda:0", "lora_rank": 16,
+             "ckpt": "/path/to/model_final_ema.pt"},
  "prompts": ["a sunlit kitchen", "a cat on a windowsill"]}
 JSON
 conceptmod train --phrase "sunlit++" --backend supra --stage model \
     --config supra-edit.json --out outputs/supra_sunlit
 ```
 
-A missing checkpoint raises `FileNotFoundError` before any encoder download. A `resolution` backend option other than 256 is rejected. The backend is LoRA-only; a `train_method="xattn"` training option is ignored.
+A missing checkpoint raises `FileNotFoundError` before any encoder download. A `resolution` backend option other than 256 is rejected. The backend is LoRA-only: omit `train_method` or select `"lora"`; other explicit methods are rejected.
 
 ## LoRA
 
@@ -65,7 +65,7 @@ Encoder LoRA (stage 1) targets Flan-T5 `q` / `k` / `v` / `o`.
 pytest tests/test_supra.py
 ```
 
-`load_backend("supra", device="cpu")` without `dummy` still goes through `require_cuda` and fails closed. Unit tests construct `SupraDiT()` directly for the 104,094,736 count.
+`SupraBackend(device="cpu")` without `model_id="dummy"` rejects the CPU device before checkpoint lookup. Unit tests construct `SupraDiT()` directly for the 104,094,736 count.
 
 ## Smoke
 
@@ -73,4 +73,4 @@ pytest tests/test_supra.py
 python scripts/smoke_supra.py
 ```
 
-With CUDA and a checkpoint: three neutral-daylight generates, then one `sunlit++` step with LoRA grads. Without either, the script prints `skip supra smoke:` and exits 0. It does not download weights.
+With CUDA and a checkpoint: three neutral-daylight generates, then one `sunlit++` step with LoRA grads. Without either, the script prints `skip supra smoke:` and exits 0. It does not download the Supra DiT checkpoint; constructing the real backend may fetch the text encoder and VAE if they are not cached.

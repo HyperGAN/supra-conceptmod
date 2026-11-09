@@ -230,7 +230,7 @@ def test_dummy_backend_contract_without_hub():
 
     z = torch.randn(1, *backend.latent_shape)
     t = torch.tensor([0.0])
-    params = backend.trainable_parameters("xattn")
+    params = backend.trainable_parameters(None)
     assert params
     assert all(
         ".self_attn." in name or ".cross_attn." in name
@@ -293,7 +293,14 @@ def test_dummy_encoder_lora_and_save(tmp_path):
     assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in params)
     out = tmp_path / "adapter"
     backend.save_trained(str(out))
-    assert (out / "adapter_config.json").is_file()
+    from conceptmod.artifacts import read_edit_bundle
+
+    manifest = read_edit_bundle(out)
+    assert set(manifest["components"]) == {"transformer", "text_encoder"}
+    for component in manifest["components"].values():
+        folder = out / component["adapters"]["default"]["path"]
+        assert (folder / "adapter_config.json").is_file()
+        assert (folder / "adapter_model.safetensors").is_file()
 
 
 def test_stored_uncond_is_the_empty_prompt():
